@@ -1,0 +1,5 @@
+{
+  "name": "FreeTube CC Downloader",
+  "description": "A modern, copyright-safe YouTube video downloader for Creative Commons content. Features format selection, quality options, and an AI legal assistant.",
+  "requestFramePermissions": []
+}
