@@ -1,7 +1,11 @@
-
 import { VideoMetadata } from '../types';
 
-const API_BASE_URL = 'http://localhost:3001';
+// In production (Vercel), we use relative paths '/api'.
+// In development, we point to the local backend server.
+// Fix: Property 'env' does not exist on type 'ImportMeta'
+const API_BASE_URL = (import.meta as any).env?.PROD 
+  ? '' 
+  : 'http://localhost:3001';
 
 /**
  * Extract YouTube Video ID from various URL formats
@@ -38,13 +42,12 @@ const generateFallbackData = (url: string): VideoMetadata => {
 };
 
 /**
- * Fetches video metadata from the local Node.js backend.
- * Falls back to mock data if connection fails.
+ * Fetches video metadata from the backend.
  */
 export const fetchVideoInfo = async (url: string): Promise<VideoMetadata> => {
   try {
     // Attempt to fetch from real backend
-    const response = await fetch(`${API_BASE_URL}/fetch-info`, {
+    const response = await fetch(`${API_BASE_URL}/api/fetch-info`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -63,7 +66,7 @@ export const fetchVideoInfo = async (url: string): Promise<VideoMetadata> => {
     console.warn("Fetch Error (Falling back to mock data):", error);
     
     // If it's a network error (server not running), return fallback data instead of throwing
-    if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+    if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('JSON'))) {
       return generateFallbackData(url);
     }
     
@@ -77,5 +80,5 @@ export const fetchVideoInfo = async (url: string): Promise<VideoMetadata> => {
 export const getDownloadUrl = (videoUrl: string, formatId: string): string => {
   const encodedUrl = encodeURIComponent(videoUrl);
   const encodedFormat = encodeURIComponent(formatId);
-  return `${API_BASE_URL}/download?url=${encodedUrl}&format_id=${encodedFormat}`;
+  return `${API_BASE_URL}/api/download?url=${encodedUrl}&format_id=${encodedFormat}`;
 };

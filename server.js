@@ -13,15 +13,14 @@ app.use(express.json());
  * Root route to check server status
  */
 app.get('/', (req, res) => {
-  res.json({ status: 'Online', message: 'FreeTube Downloader Backend is Running' });
+  res.json({ status: 'Online', message: 'FreeTube Downloader Backend is Running. Use /api/fetch-info' });
 });
 
 /**
- * Endpoint: POST /fetch-info
+ * Endpoint: POST /api/fetch-info
  * Uses yt-dlp to get video metadata.
- * Now allows ALL videos regardless of license.
  */
-app.post('/fetch-info', (req, res) => {
+app.post('/api/fetch-info', (req, res) => {
   const { url } = req.body;
   
   if (!url || !url.includes('youtube.com') && !url.includes('youtu.be')) {
@@ -46,27 +45,20 @@ app.post('/fetch-info', (req, res) => {
     try {
       const json = JSON.parse(data);
       
-      // License Detection (Informational only now)
       const licenseField = json.license || '';
       const description = json.description || '';
       const isCC = licenseField.toLowerCase().includes('creative commons') || 
                    description.toLowerCase().includes('creative commons attribution');
 
-      // Process formats
-      // 1. Filter for formats that have both Audio and Video (muxed) to ensure playback works easily
-      // 2. OR explicit audio-only formats
       const rawFormats = json.formats || [];
       
       const cleanFormats = rawFormats
         .filter(f => {
-          // Keep if it's a standard muxed format (mp4/webm with both audio and video)
           const isMuxed = f.ext === 'mp4' && f.acodec !== 'none' && f.vcodec !== 'none';
-          // Keep if it's m4a (audio only)
           const isAudio = f.ext === 'm4a';
           return isMuxed || isAudio;
         })
         .sort((a, b) => {
-            // Sort by resolution (height) descending, then by filesize
             if (a.height !== b.height) return (b.height || 0) - (a.height || 0);
             return (b.filesize || 0) - (a.filesize || 0);
         })
@@ -78,11 +70,9 @@ app.post('/fetch-info', (req, res) => {
           filesize_approx_mb: f.filesize ? parseFloat((f.filesize / 1024 / 1024).toFixed(2)) : 0
         }));
       
-      // Deduplicate
       const uniqueFormats = [];
       const seen = new Set();
       
-      // Always add the High Quality MP3 option first
       uniqueFormats.push({
         id: 'mp3-high',
         ext: 'mp3',
@@ -108,8 +98,8 @@ app.post('/fetch-info', (req, res) => {
         views: json.view_count,
         uploadDate: json.upload_date,
         license: licenseField || 'Standard YouTube License',
-        isCopyrightFree: true, // Force true to allow download of any video
-        isCC: isCC, // Pass actual status for UI badge
+        isCopyrightFree: true,
+        isCC: isCC,
         formats: uniqueFormats.slice(0, 12)
       });
       
@@ -121,26 +111,22 @@ app.post('/fetch-info', (req, res) => {
 });
 
 /**
- * Endpoint: GET /download
+ * Endpoint: GET /api/download
  * Streams the download using yt-dlp.
  */
-app.get('/download', (req, res) => {
+app.get('/api/download', (req, res) => {
   const { url, format_id, title } = req.query;
 
   if (!url || !format_id) {
     return res.status(400).send('Missing URL or Format ID');
   }
 
-  // Clean title for filename
   const safeTitle = (title || 'video').replace(/[^a-z0-9]/gi, '_').substring(0, 50);
-
   const args = ['--output', '-', url]; 
 
-  // Setup headers and args based on format
   if (format_id === 'mp3-high') {
     res.header('Content-Disposition', `attachment; filename="${safeTitle}.mp3"`);
     res.header('Content-Type', 'audio/mpeg');
-    // Extract audio and convert to mp3
     args.push('-x', '--audio-format', 'mp3');
   } else {
     res.header('Content-Disposition', `attachment; filename="${safeTitle}.mp4"`);
@@ -148,14 +134,11 @@ app.get('/download', (req, res) => {
     args.push('-f', format_id);
   }
 
-  // Spawn process
   const ytDlpProcess = spawn('yt-dlp', args);
-
-  // Pipe directly to response
   ytDlpProcess.stdout.pipe(res);
 
   ytDlpProcess.stderr.on('data', (data) => {
-     // console.log(`stderr: ${data}`); // Optional logging
+     // console.log(`stderr: ${data}`);
   });
 
   ytDlpProcess.on('close', (code) => {
